@@ -1,43 +1,46 @@
-GuruTvapay Node.js SDK — gurutvapay-node-sdk.js
+# GuruTvapay Node.js SDK — `gurutvapay-node-sdk.js`
 
 A single-file, drop-in Node.js SDK for the GuruTvapay payment gateway.
 This README explains installation, configuration, and example usage (API-key and OAuth modes), idempotency, webhook verification, and publishing tips.
 
-Requirements
+---
 
-Node.js 18+ recommended (has built-in fetch).
+## Requirements
 
-If using Node < 18, install node-fetch: npm install node-fetch.
+* Node.js 18+ recommended (has built-in `fetch`).
+* If using Node < 18, install `node-fetch`: `npm install node-fetch`.
+* `crypto` is used (built-in Node module).
 
-crypto is used (built-in Node module).
+---
 
-What’s included
+## What’s included
 
-GuruTvapayClient class with methods:
+* `GuruTvapayClient` class with methods:
 
-loginWithPassword(username, password) — OAuth password grant
+  * `loginWithPassword(username, password)` — OAuth password grant
+  * `createPayment(payload, extraHeaders)` — create payment (`/initiate-payment`)
+  * `transactionStatus(merchantOrderId)` — check order status
+  * `transactionList(limit, page)` — paginated list
+  * `request(method, pathOrUrl, options)` — generic request (attach headers, params, body)
+  * `static verifyWebhook(payloadBytes, signatureHeader, secret)` — HMAC-SHA256 verification
+* Built-in retry/backoff logic and basic timeout handling.
 
-createPayment(payload, extraHeaders) — create payment (/initiate-payment)
+---
 
-transactionStatus(merchantOrderId) — check order status
+## Installation
 
-transactionList(limit, page) — paginated list
+1. Save `gurutvapay-node-sdk.js` into your project.
+2. (Optional, Node < 18) Install `node-fetch`:
 
-request(method, pathOrUrl, options) — generic request (attach headers, params, body)
-
-static verifyWebhook(payloadBytes, signatureHeader, secret) — HMAC-SHA256 verification
-
-Built-in retry/backoff logic and basic timeout handling.
-
-Installation
-
-Save gurutvapay-node-sdk.js into your project.
-
-(Optional, Node < 18) Install node-fetch:
-
+```bash
 npm install node-fetch
+```
 
-Quickstart — API-key mode (recommended)
+---
+
+## Quickstart — API-key mode (recommended)
+
+```js
 // example.js
 import GuruTvapayClient from './gurutvapay-node-sdk.js';
 
@@ -59,13 +62,19 @@ async function run() {
 }
 
 run();
-
+```
 
 Run:
 
+```bash
 node example.js
+```
 
-OAuth (password grant) example
+---
+
+## OAuth (password grant) example
+
+```js
 import GuruTvapayClient from './gurutvapay-node-sdk.js';
 
 const client = new GuruTvapayClient({
@@ -78,15 +87,24 @@ await client.loginWithPassword(process.env.GURUTVA_USERNAME, process.env.GURUTVA
 
 const payment = await client.createPayment({ /* ... */ });
 console.log(payment);
+```
 
-Idempotency (avoid duplicate payments)
+---
 
-Use unique Idempotency-Key header when creating payment:
+## Idempotency (avoid duplicate payments)
 
+Use unique `Idempotency-Key` header when creating payment:
+
+```js
 const idempotencyKey = crypto.randomUUID(); // Node 14.17+ or use other UUID
 const payment = await client.createPayment(payload, { 'Idempotency-Key': idempotencyKey });
+```
 
-Webhook verification (Express example)
+---
+
+## Webhook verification (Express example)
+
+```js
 import express from 'express';
 import bodyParser from 'body-parser';
 import GuruTvapayClient from './gurutvapay-node-sdk.js';
@@ -107,82 +125,80 @@ app.post('/webhook', (req, res) => {
 });
 
 app.listen(3000);
+```
 
-API surface & options
+---
+
+## API surface & options
 
 Constructor options:
 
-env — 'uat' or 'live' (default 'uat')
-
-apiKey — server API key (preferred)
-
-clientId, clientSecret — for OAuth password grant
-
-root — override base URL (default https://api.gurutvapay.com)
-
-timeout, maxRetries, backoffFactor
+* `env` — `'uat'` or `'live'` (default `'uat'`)
+* `apiKey` — server API key (preferred)
+* `clientId`, `clientSecret` — for OAuth password grant
+* `root` — override base URL (default `https://api.gurutvapay.com`)
+* `timeout`, `maxRetries`, `backoffFactor`
 
 Methods:
 
-loginWithPassword(username, password) → { access_token, expires_at }
+* `loginWithPassword(username, password)` → `{ access_token, expires_at }`
+* `createPayment(payload, extraHeaders)` → response JSON
+* `transactionStatus(merchantOrderId)` → response JSON
+* `transactionList(limit, page)` → response JSON
+* `request(method, pathOrUrl, { headers, params, data, jsonBody })` → generic request result
+* `static verifyWebhook(payloadBytes, signatureHeader, secret)` → boolean
 
-createPayment(payload, extraHeaders) → response JSON
+---
 
-transactionStatus(merchantOrderId) → response JSON
+## Error handling
 
-transactionList(limit, page) → response JSON
+* The SDK throws errors for HTTP/auth failures and rate limits. Wrap calls in `try/catch` and map to your app’s error handling.
+* For 429 (rate-limited) responses the SDK attempts retries based on `Retry-After` header or exponential backoff.
 
-request(method, pathOrUrl, { headers, params, data, jsonBody }) → generic request result
+---
 
-static verifyWebhook(payloadBytes, signatureHeader, secret) → boolean
+## Testing & local webhook simulation
 
-Error handling
+* Use the UAT environment for integration tests.
+* Simulate webhook signature with openssl:
 
-The SDK throws errors for HTTP/auth failures and rate limits. Wrap calls in try/catch and map to your app’s error handling.
-
-For 429 (rate-limited) responses the SDK attempts retries based on Retry-After header or exponential backoff.
-
-Testing & local webhook simulation
-
-Use the UAT environment for integration tests.
-
-Simulate webhook signature with openssl:
-
+```bash
 payload='{"merchantOrderId":"ORD123","status":"success"}'
 secret='your_webhook_secret'
 sig=$(echo -n $payload | openssl dgst -sha256 -hmac "$secret" -hex | sed 's/^.* //')
 curl -X POST http://localhost:3000/webhook -H "X-Signature: sha256=$sig" -d "$payload"
+```
 
-Publishing (optional)
+---
 
-Add package.json and publish to npm:
+## Publishing (optional)
 
+* Add `package.json` and publish to npm:
+
+```json
 {
   "name": "gurutvapay-sdk",
   "version": "0.1.0",
   "main": "gurutvapay-node-sdk.js",
   "type": "module"
 }
+```
 
+* Run `npm publish` after testing. Use semantic versioning.
 
-Run npm publish after testing. Use semantic versioning.
+---
 
-Security & best practices
+## Security & best practices
 
-Keep apiKey, clientSecret, and webhook secret in env vars / secret manager.
+* Keep `apiKey`, `clientSecret`, and `webhook` secret in env vars / secret manager.
+* Verify webhooks server-side only.
+* Do not expose server API keys in front-end/browser code.
+* Use HTTPS in production.
 
-Verify webhooks server-side only.
+---
 
-Do not expose server API keys in front-end/browser code.
+## Next steps
 
-Use HTTPS in production.
-
-Next steps I can help with
-
-Convert this SDK to TypeScript (with typings).
-
-Create npm package.json + publish workflow and GitHub Actions CI.
-
-Add unit tests (Jest) and integration test examples.
-
-Want a TypeScript version or the package.json + CI next?
+* Convert this SDK to TypeScript (with typings).
+* Create npm `package.json` + publish workflow and GitHub Actions CI.
+* Add unit tests (Jest) and integration test examples.
